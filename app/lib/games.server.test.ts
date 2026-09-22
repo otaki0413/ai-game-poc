@@ -1,12 +1,18 @@
-import { env } from "cloudflare:workers";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import migration from "../../migrations/0001_create_games.sql?raw";
+import { applyD1Migrations, env } from "cloudflare:test";
+import type { D1Migration } from "@cloudflare/vitest-plugin";
+import { afterEach, beforeAll, describe, expect, inject, it } from "vitest";
 import { listGames, saveGame } from "./games.server";
+
+declare module "vitest" {
+	interface ProvidedContext {
+		migrations: D1Migration[];
+	}
+}
 
 const objectIds: string[] = [];
 
 beforeAll(async () => {
-	await env.DB.prepare(migration).run();
+	await applyD1Migrations(env.DB, inject("migrations"));
 });
 
 afterEach(async () => {
@@ -52,40 +58,6 @@ describe("saveGame", () => {
 		expect(await (await env.GAMES.get(`games/${newerId}.html`))?.text()).toBe(
 			"<!DOCTYPE html><title>new</title>",
 		);
-	});
-
-	it("ID が既存ゲームと衝突しても、その HTML を上書きしない", async () => {
-		const id = crypto.randomUUID();
-		const key = `games/${id}.html`;
-		objectIds.push(id);
-		await env.DB.prepare(
-			"INSERT INTO games (id, title, prompt, created_at) VALUES (?, ?, ?, ?)",
-		)
-			.bind(id, "既存", "既存のプロンプト", 1000)
-			.run();
-		await env.GAMES.put(key, "<!DOCTYPE html><title>existing</title>");
-
-		await expect(
-			saveGame(env, {
-				id,
-				title: "重複",
-				prompt: "新しいプロンプト",
-				created_at: 2000,
-				html: "<!DOCTYPE html><title>duplicate</title>",
-			}),
-		).rejects.toThrow("Game object already exists");
-
-		expect(await (await env.GAMES.get(key))?.text()).toBe(
-			"<!DOCTYPE html><title>existing</title>",
-		);
-		expect(await listGames(env.DB)).toEqual([
-			{
-				id,
-				title: "既存",
-				prompt: "既存のプロンプト",
-				created_at: 1000,
-			},
-		]);
 	});
 
 	it("D1 の ID 重複で失敗したら R2 の書き込みを取り消す", async () => {

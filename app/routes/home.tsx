@@ -7,13 +7,27 @@ import type { Route } from "./+types/home";
 
 export const meta: Route.MetaFunction = () => [{ title: "AI Game POC" }];
 
+const PROMPT_MAX_LENGTH = 2000;
+const TITLE_MAX_LENGTH = 100;
+
 const generateSchema = v.object({
 	prompt: v.pipe(
-		v.string(),
+		v.string("プロンプトを入力してください。"),
 		v.trim(),
 		v.nonEmpty("プロンプトを入力してください。"),
+		v.maxLength(
+			PROMPT_MAX_LENGTH,
+			`プロンプトは${PROMPT_MAX_LENGTH}文字以内で入力してください。`,
+		),
 	),
-	title: v.pipe(v.string(), v.trim()),
+	title: v.pipe(
+		v.string("タイトルを文字列で入力してください。"),
+		v.trim(),
+		v.maxLength(
+			TITLE_MAX_LENGTH,
+			`タイトルは${TITLE_MAX_LENGTH}文字以内で入力してください。`,
+		),
+	),
 });
 
 export async function loader() {
@@ -22,16 +36,15 @@ export async function loader() {
 
 export async function action({ request }: Route.ActionArgs) {
 	const formData = await request.formData();
-	const rawPrompt = formData.get("prompt");
-	const rawTitle = formData.get("title") ?? "";
-	const values = {
-		prompt: typeof rawPrompt === "string" ? rawPrompt : "",
-		title: typeof rawTitle === "string" ? rawTitle : "",
+	const input = {
+		prompt: formData.get("prompt"),
+		title: formData.get("title") ?? "",
 	};
-	const parsed = v.safeParse(generateSchema, {
-		prompt: rawPrompt,
-		title: rawTitle,
-	});
+	const values = {
+		prompt: typeof input.prompt === "string" ? input.prompt : "",
+		title: typeof input.title === "string" ? input.title : "",
+	};
+	const parsed = v.safeParse(generateSchema, input);
 	if (!parsed.success) {
 		return data({ error: parsed.issues[0].message, values }, { status: 400 });
 	}
@@ -63,7 +76,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Home({ loaderData, actionData }: Route.ComponentProps) {
 	const navigation = useNavigation();
-	const isGenerating = navigation.state === "submitting";
+	const isGenerating = navigation.state !== "idle";
 
 	return (
 		<main className="min-h-screen bg-slate-50 px-5 py-12 text-slate-900 sm:px-8">
@@ -96,6 +109,7 @@ export default function Home({ loaderData, actionData }: Route.ComponentProps) {
 								id="prompt"
 								name="prompt"
 								rows={4}
+								maxLength={PROMPT_MAX_LENGTH}
 								defaultValue={actionData?.values.prompt}
 								placeholder="例: 星を集めるシンプルなアーケードゲーム"
 								aria-invalid={actionData?.error ? true : undefined}
@@ -112,6 +126,7 @@ export default function Home({ loaderData, actionData }: Route.ComponentProps) {
 								id="title"
 								name="title"
 								type="text"
+								maxLength={TITLE_MAX_LENGTH}
 								defaultValue={actionData?.values.title}
 								placeholder="未入力ならプロンプトから自動設定"
 								className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"

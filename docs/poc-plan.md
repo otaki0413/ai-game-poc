@@ -79,10 +79,10 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
                                           ├─ env.AI.run(glm-4.7-flash) → 単一 HTML
                                           ├─ 後処理に失敗したら何も保存せずエラーを返す
                                           ├─ R2.put(games/{id}.html)
-                                          └─ D1 insert → {id}
+                                          └─ D1 insert → {id}（失敗したら R2.delete で補償）
 [React UI] --loader--> D1 から一覧
 [iframe sandbox="allow-scripts allow-pointer-lock"] --GET /play/{id}--> R2 から HTML 配信 (CSP 付き)
-[React UI] --action (delete)--> D1 delete + R2.delete
+[React UI] --action (delete)--> D1 delete → R2.delete（どちらも冪等）
 ```
 
 ## ルート設計
@@ -103,6 +103,15 @@ workers/
 
 - バインディングは `import { env } from "cloudflare:workers"` で取る（公式テンプレートの方式）。Cloudflare のドキュメントにある `context.cloudflare.env` は RR 7 時代の書き方で、v8 では load context に plain object を渡せないため動かない
 - タイトルは利用者が任意入力し、空ならプロンプトの先頭 N 文字を使う
+
+### D1 と R2 の書き込み順と失敗時の契約
+
+D1 と R2 を跨ぐ原子性はないので、「R2 の孤児は許容、D1 の孤児は許容しない」を原則にする。
+一覧に載るゲームは必ず遊べる状態を保つ。
+
+- 生成: `R2.put` → `D1 insert` の順。D1 が失敗したら `R2.delete` で補償し、エラーを返す。補償も失敗した場合は R2 に孤児が残るが、一覧にも `/play/:id` にも現れないので放置する
+- 削除: `D1 delete` → `R2 delete` の順。どちらも対象がなくても成功する（冪等）ので、R2 が失敗しても一覧からは消えており、同じ ID で再実行すれば R2 も消える
+- 孤児の掃除は POC では行わない（1 ゲーム 50KB、Free 枠 10GB）。v2 以降の課題
 
 ### D1 スキーマ
 

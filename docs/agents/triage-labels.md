@@ -1,11 +1,7 @@
 # Triage labels
 
 `triage` スキルは未導入なので、5 つの状態ロールを運用するラベル体系は持たない。
-ただし `to-tickets` が発行時に `ready-for-agent` を付けるため、このラベルだけはリポジトリに存在させる。
-
-```bash
-gh label create ready-for-agent --description "Fully specified, ready for an agent"
-```
+ただし `to-tickets` が発行時に `ready-for-agent` を付けるため、このラベルだけを作成済み。
 
 `to-tickets` が切るチケットは構造上すべて agent が着手できる状態なので、このラベルは実質「`to-tickets` 由来」の目印として働く。
 
@@ -13,7 +9,7 @@ gh label create ready-for-agent --description "Fully specified, ready for an age
 
 | Canonical role | Label string | 状態 |
 |---|---|---|
-| `ready-for-agent` | `ready-for-agent` | 要作成 |
+| `ready-for-agent` | `ready-for-agent` | 作成済み |
 | `needs-triage` | — | `triage` 導入時 |
 | `needs-info` | — | `triage` 導入時 |
 | `ready-for-human` | — | `triage` 導入時 |

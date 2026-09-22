@@ -1,6 +1,6 @@
 # AI ゲーム生成 CtoC プラットフォーム POC 計画
 
-作成日: 2026-09-22 / 最終更新: 2026-09-22（詰問セッションの結果を反映）
+作成日: 2026-09-22 / 最終更新: 2026-09-23（技術スタックの詰問結果を反映）
 
 設計判断の記録は [docs/adr/](adr/)、用語は [CONTEXT.md](../CONTEXT.md)。
 
@@ -54,8 +54,11 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 | ゲーム本体 | R2 (`games/{id}.html`) | 10GB、Class A 100 万/月、Class B 1,000 万/月 | 1 ゲーム 20〜50KB |
 | LLM | Workers AI `@cf/zai-org/glm-4.7-flash` | 10,000 Neurons/日 | 1 ゲーム ≈ 400〜900 Neurons → 10〜20 ゲーム/日 |
 | アクセス制限 | Cloudflare Access（Zero Trust Free、Worker 単位の保護） | 無料（Zero Trust 有効化時に支払い方法の登録は必要） | — |
-| AI Gateway（任意） | 生成ログ・キャッシュ | 無料 | — |
-| 開発 | pnpm, Wrangler（D1/R2/AI をローカルエミュレート） | — | — |
+| AI Gateway | Workers AI の呼び出しログと Neurons 消費の可視化。`env.AI.run()` に `gateway: { id }` を渡す | 無料 | — |
+| フォーム検証 | valibot（action の入力 2 フィールドのみ） | — | — |
+| lint / format | Biome（`biome.json` 1 枚、`pnpm check`）。pre-commit フックは入れない | — | — |
+| テスト | Vitest（node 環境）。対象は生成後処理の純関数のみ | — | — |
+| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数で固定 HTML を返すスタブに切り替える） | — | — |
 
 ### 選定理由
 
@@ -64,6 +67,10 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 - **Claude API ではなく Workers AI**: Cloudflare Free で閉じるため。詳細は ADR 0001
 - **Dynamic Workers を使わない**: Paid 専用（Open Beta）。POC のゲームはクライアント完結なので不要。サーバー側ロジック（スコア検証・マルチプレイ）が必要になった段階で導入する
 - **Durable Objects を使わない**: Free でも SQLite バックエンドなら使えるが、POC の要件にない
+- **D1 は生 SQL**: テーブル 1 つ・クエリ 4 種に ORM は不要。マイグレーションは `wrangler d1 migrations`。Drizzle は本開発でテーブルが増えてから
+- **Biome を選び Vite+ を見送る**: Vite+ は 2026-09 時点で 1.0 RC 直後。`vite.config.ts` と vitest の依存解決を乗っ取る構造で、`@cloudflare/vite-plugin` との dev サーバーハング（open issue）と `vitest-pool-workers` の Vitest 4 固定に当たる。1.0 安定後に再検討
+- **ゲーム ID は `crypto.randomUUID()`**: 依存ゼロで衝突を考えない。R2 キーと URL に共用
+- **UI は素の Tailwind**: 画面 2 つにコンポーネントライブラリは不要。見た目は完了条件に含まれない
 
 ### Workers AI モデルの注意（2026-09-22 時点、公式ドキュメント確認済み）
 
@@ -93,9 +100,10 @@ app/
   routes/
     home.tsx            # 一覧 + 生成フォーム（loader: D1、action: 生成）
     games.$id.tsx       # 詳細ページ、iframe で /play/:id を埋め込む、削除ボタン（action: 削除）
-    play.$id.tsx        # resource route: R2 から HTML を返す（loader が Response を返す）
+    play.$id.tsx        # resource route: D1 に行があるときだけ R2 から HTML を返す。なければ 404（loader が Response を返す）
   lib/
-    generate.server.ts  # LLM 呼び出し + 後処理。プロバイダ差し替え可能にする
+    generate.server.ts  # LLM 呼び出し + 後処理。環境変数で Workers AI / スタブを切り替える
+    postprocess.ts      # 純関数: <think> 除去、フェンス除去、DOCTYPE 判定。Vitest の対象
     games.server.ts     # D1 / R2 への保存・取得・削除
 workers/
   app.ts                # Worker エントリ。RR の createRequestHandler を呼ぶだけ
@@ -107,10 +115,10 @@ workers/
 ### D1 と R2 の書き込み順と失敗時の契約
 
 D1 と R2 を跨ぐ原子性はないので、「R2 の孤児は許容、D1 の孤児は許容しない」を原則にする。
-一覧に載るゲームは必ず遊べる状態を保つ。
+一覧に載るゲームは必ず遊べる状態を保ち、`/play/:id` は D1 に行があるときだけ R2 を返す。
 
-- 生成: `R2.put` → `D1 insert` の順。D1 が失敗したら `R2.delete` で補償し、エラーを返す。補償も失敗した場合は R2 に孤児が残るが、一覧にも `/play/:id` にも現れないので放置する
-- 削除: `D1 delete` → `R2 delete` の順。どちらも対象がなくても成功する（冪等）ので、R2 が失敗しても一覧からは消えており、同じ ID で再実行すれば R2 も消える
+- 生成: `R2.put` → `D1 insert` の順。D1 が失敗したら `R2.delete` で補償し、エラーを返す。補償も失敗した場合は R2 に孤児が残るが、D1 に行がないので一覧にも `/play/:id` にも現れず、放置する
+- 削除: `D1 delete` → `R2 delete` の順。どちらも対象がなくても成功する（冪等）ので、R2 が失敗しても一覧からも `/play/:id` からも消えており、同じ ID で再実行すれば R2 も消える
 - 孤児の掃除は POC では行わない（1 ゲーム 50KB、Free 枠 10GB）。v2 以降の課題
 
 ### D1 スキーマ
@@ -154,7 +162,7 @@ CREATE TABLE games (
 | v1 | `window.GameSDK.submitScore()`（postMessage）+ D1 `scores`。ゲームがプラットフォームに何かを伝える最初の経路 |
 | v2 | `*.play.example.com` ワイルドカードでゲームごとにオリジン分離、他人に見せる場合の認証 |
 | v3 (Paid) | サーバー側ロジックが必要なゲーム → Dynamic Workers / DO Facets |
-| v4 | Vectorize でセマンティック検索、Workflows で生成の非同期化、AI Gateway でコスト可視化、Stripe |
+| v4 | Vectorize でセマンティック検索、Workflows で生成の非同期化、Stripe |
 
 ## Paid プランに移行した場合に変わること（参考。POC では移行しない）
 

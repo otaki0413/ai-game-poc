@@ -10,7 +10,7 @@ type GameBindings = Pick<Env, "DB" | "GAMES">;
 export async function listGames(db: D1Database): Promise<Game[]> {
 	const result = await db
 		.prepare(
-			"SELECT id, title, prompt, created_at FROM games ORDER BY created_at DESC",
+			"SELECT id, title, prompt, created_at FROM games ORDER BY created_at DESC, rowid DESC",
 		)
 		.all<Game>();
 	return result.results;
@@ -21,7 +21,11 @@ export async function saveGame(
 	game: Game & { html: string },
 ): Promise<void> {
 	const key = `games/${game.id}.html`;
-	await GAMES.put(key, game.html);
+	// An ID collision must leave the existing game's HTML intact.
+	const stored = await GAMES.put(key, game.html, {
+		onlyIf: new Headers({ "If-None-Match": "*" }),
+	});
+	if (stored === null) throw new Error("Game object already exists");
 
 	try {
 		await DB.prepare(

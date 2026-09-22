@@ -100,7 +100,7 @@ app/
   routes/
     home.tsx            # 一覧 + 生成フォーム（loader: D1、action: 生成）
     games.$id.tsx       # 詳細ページ、iframe で /play/:id を埋め込む、削除ボタン（action: 削除）
-    play.$id.tsx        # resource route: R2 から HTML を返す（loader が Response を返す）
+    play.$id.tsx        # resource route: D1 に行があるときだけ R2 から HTML を返す。なければ 404（loader が Response を返す）
   lib/
     generate.server.ts  # LLM 呼び出し + 後処理。環境変数で Workers AI / スタブを切り替える
     postprocess.ts      # 純関数: <think> 除去、フェンス除去、DOCTYPE 判定。Vitest の対象
@@ -115,10 +115,10 @@ workers/
 ### D1 と R2 の書き込み順と失敗時の契約
 
 D1 と R2 を跨ぐ原子性はないので、「R2 の孤児は許容、D1 の孤児は許容しない」を原則にする。
-一覧に載るゲームは必ず遊べる状態を保つ。
+一覧に載るゲームは必ず遊べる状態を保ち、`/play/:id` は D1 に行があるときだけ R2 を返す。
 
-- 生成: `R2.put` → `D1 insert` の順。D1 が失敗したら `R2.delete` で補償し、エラーを返す。補償も失敗した場合は R2 に孤児が残るが、一覧にも `/play/:id` にも現れないので放置する
-- 削除: `D1 delete` → `R2 delete` の順。どちらも対象がなくても成功する（冪等）ので、R2 が失敗しても一覧からは消えており、同じ ID で再実行すれば R2 も消える
+- 生成: `R2.put` → `D1 insert` の順。D1 が失敗したら `R2.delete` で補償し、エラーを返す。補償も失敗した場合は R2 に孤児が残るが、D1 に行がないので一覧にも `/play/:id` にも現れず、放置する
+- 削除: `D1 delete` → `R2 delete` の順。どちらも対象がなくても成功する（冪等）ので、R2 が失敗しても一覧からも `/play/:id` からも消えており、同じ ID で再実行すれば R2 も消える
 - 孤児の掃除は POC では行わない（1 ゲーム 50KB、Free 枠 10GB）。v2 以降の課題
 
 ### D1 スキーマ

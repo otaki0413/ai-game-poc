@@ -12,6 +12,7 @@
 			"!.react-router",
 			"!build",
 			"!.wrangler",
+			"!.agents/skills/valibot",
 			"!skills-lock.json",
 			"!.claude/settings.local.json"
 		],

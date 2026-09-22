@@ -57,7 +57,7 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 | AI Gateway | Workers AI の呼び出しログと Neurons 消費の可視化。`env.AI.run()` に `gateway: { id: "default" }` を渡す。ID `default` は最初の呼び出しで自動作成されるため、事前の作成は不要 | 無料 | — |
 | フォーム検証 | valibot（action の入力 2 フィールドのみ） | — | — |
 | lint / format | Biome（`biome.json` 1 枚、`pnpm check`）。pre-commit フックは入れない | — | — |
-| テスト | Vitest 4 + `@cloudflare/vitest-plugin`（workerd 上で実行。プラグインの peer 依存のため Vitest は 4 系に固定）。対象は生成後処理の純関数、生成のリトライ、D1 / R2 への保存・取得・削除（失敗時の契約を含む）。D1 の失敗は本物の制約違反で、R2 の失敗は例外を投げるラッパーの注入で起こす。そのため保存・生成のモジュールはバインディングを引数で受け取る | — | — |
+| テスト | Vitest 4 + `@cloudflare/vitest-plugin`（workerd 上で実行。プラグインの peer 依存のため Vitest は 4 系に固定）。対象は生成後処理の純関数、生成のリトライ、D1 / R2 への保存・取得・削除（失敗時の契約を含む）。D1 insert の失敗は本物の制約違反（ID の重複）で起こす。D1 delete と R2 の失敗は、現行スキーマでは本物のバインディングで起こせないため、例外を投げるラッパーの注入で起こす。そのため保存・生成のモジュールはバインディングを引数で受け取る | — | — |
 | 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数 `GENERATOR`（`stub` / `workers-ai`）で固定 HTML を返すスタブに切り替える。wrangler 設定の `vars` は本番値の `workers-ai`、ローカルは `.dev.vars` で `stub` に上書きする） | — | — |
 
 ### 選定理由

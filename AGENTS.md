@@ -21,6 +21,10 @@ AI でブラウザゲームを生成し、一覧から遊べる CtoC プラッ�
 
 GitHub Issues（`gh` CLI）。See `docs/agents/issue-tracker.md`.
 
+### Triage labels
+
+`triage` 未導入。`to-tickets` が使う `ready-for-agent` のみ。See `docs/agents/triage-labels.md`.
+
 ### Domain docs
 
 single-context（ルートの `CONTEXT.md` + `docs/adr/`）。See `docs/agents/domain.md`.

@@ -1,6 +1,6 @@
 # AI ゲーム生成 CtoC プラットフォーム POC 計画
 
-作成日: 2026-09-22 / 最終更新: 2026-09-22（詰問セッションの結果を反映）
+作成日: 2026-09-22 / 最終更新: 2026-09-23（技術スタックの詰問結果を反映）
 
 設計判断の記録は [docs/adr/](adr/)、用語は [CONTEXT.md](../CONTEXT.md)。
 
@@ -54,8 +54,11 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 | ゲーム本体 | R2 (`games/{id}.html`) | 10GB、Class A 100 万/月、Class B 1,000 万/月 | 1 ゲーム 20〜50KB |
 | LLM | Workers AI `@cf/zai-org/glm-4.7-flash` | 10,000 Neurons/日 | 1 ゲーム ≈ 400〜900 Neurons → 10〜20 ゲーム/日 |
 | アクセス制限 | Cloudflare Access（Zero Trust Free、Worker 単位の保護） | 無料（Zero Trust 有効化時に支払い方法の登録は必要） | — |
-| AI Gateway（任意） | 生成ログ・キャッシュ | 無料 | — |
-| 開発 | pnpm, Wrangler（D1/R2/AI をローカルエミュレート） | — | — |
+| AI Gateway | Workers AI の呼び出しログと Neurons 消費の可視化。`env.AI.run()` に `gateway: { id }` を渡す | 無料 | — |
+| フォーム検証 | valibot（action の入力 2 フィールドのみ） | — | — |
+| lint / format | Biome（`biome.json` 1 枚、`pnpm check`）。pre-commit フックは入れない | — | — |
+| テスト | Vitest（node 環境）。対象は生成後処理の純関数のみ | — | — |
+| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数で固定 HTML を返すスタブに切り替える） | — | — |
 
 ### 選定理由
 
@@ -64,6 +67,10 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 - **Claude API ではなく Workers AI**: Cloudflare Free で閉じるため。詳細は ADR 0001
 - **Dynamic Workers を使わない**: Paid 専用（Open Beta）。POC のゲームはクライアント完結なので不要。サーバー側ロジック（スコア検証・マルチプレイ）が必要になった段階で導入する
 - **Durable Objects を使わない**: Free でも SQLite バックエンドなら使えるが、POC の要件にない
+- **D1 は生 SQL**: テーブル 1 つ・クエリ 4 種に ORM は不要。マイグレーションは `wrangler d1 migrations`。Drizzle は本開発でテーブルが増えてから
+- **Biome を選び Vite+ を見送る**: Vite+ は 2026-09 時点で 1.0 RC 直後。`vite.config.ts` と vitest の依存解決を乗っ取る構造で、`@cloudflare/vite-plugin` との dev サーバーハング（open issue）と `vitest-pool-workers` の Vitest 4 固定に当たる。1.0 安定後に再検討
+- **ゲーム ID は `crypto.randomUUID()`**: 依存ゼロで衝突を考えない。R2 キーと URL に共用
+- **UI は素の Tailwind**: 画面 2 つにコンポーネントライブラリは不要。見た目は完了条件に含まれない
 
 ### Workers AI モデルの注意（2026-09-22 時点、公式ドキュメント確認済み）
 
@@ -95,7 +102,8 @@ app/
     games.$id.tsx       # 詳細ページ、iframe で /play/:id を埋め込む、削除ボタン（action: 削除）
     play.$id.tsx        # resource route: R2 から HTML を返す（loader が Response を返す）
   lib/
-    generate.server.ts  # LLM 呼び出し + 後処理。プロバイダ差し替え可能にする
+    generate.server.ts  # LLM 呼び出し + 後処理。環境変数で Workers AI / スタブを切り替える
+    postprocess.ts      # 純関数: <think> 除去、フェンス除去、DOCTYPE 判定。Vitest の対象
     games.server.ts     # D1 / R2 への保存・取得・削除
 workers/
   app.ts                # Worker エントリ。RR の createRequestHandler を呼ぶだけ

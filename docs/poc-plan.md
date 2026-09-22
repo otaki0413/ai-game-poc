@@ -1,6 +1,6 @@
 # AI ゲーム生成 CtoC プラットフォーム POC 計画
 
-作成日: 2026-09-22 / 最終更新: 2026-09-23（技術スタックの詰問結果を反映）
+作成日: 2026-09-22 / 最終更新: 2026-09-23（チケット化レビューの結果を反映）
 
 設計判断の記録は [docs/adr/](adr/)、用語は [CONTEXT.md](../CONTEXT.md)。
 
@@ -54,11 +54,11 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 | ゲーム本体 | R2 (`games/{id}.html`) | 10GB、Class A 100 万/月、Class B 1,000 万/月 | 1 ゲーム 20〜50KB |
 | LLM | Workers AI `@cf/zai-org/glm-4.7-flash` | 10,000 Neurons/日 | 1 ゲーム ≈ 400〜900 Neurons → 10〜20 ゲーム/日 |
 | アクセス制限 | Cloudflare Access（Zero Trust Free、Worker 単位の保護） | 無料（Zero Trust 有効化時に支払い方法の登録は必要） | — |
-| AI Gateway | Workers AI の呼び出しログと Neurons 消費の可視化。`env.AI.run()` に `gateway: { id }` を渡す | 無料 | — |
+| AI Gateway | Workers AI の呼び出しログと Neurons 消費の可視化。`env.AI.run()` に `gateway: { id: "default" }` を渡す。ID `default` は最初の呼び出しで自動作成されるため、事前の作成は不要 | 無料 | — |
 | フォーム検証 | valibot（action の入力 2 フィールドのみ） | — | — |
 | lint / format | Biome（`biome.json` 1 枚、`pnpm check`）。pre-commit フックは入れない | — | — |
-| テスト | Vitest（node 環境）。対象は生成後処理の純関数のみ | — | — |
-| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数で固定 HTML を返すスタブに切り替える） | — | — |
+| テスト | Vitest 4 + `@cloudflare/vitest-plugin`（workerd 上で実行。プラグインの peer 依存のため Vitest は 4 系に固定）。対象は生成後処理の純関数、生成のリトライ、D1 / R2 への保存・取得・削除（失敗時の契約を含む）。D1 insert の失敗は本物の制約違反（ID の重複）で起こす。D1 delete と R2 の失敗は、現行スキーマでは本物のバインディングで起こせないため、例外を投げるラッパーの注入で起こす。そのため保存・生成のモジュールはバインディングを引数で受け取る | — | — |
+| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数 `GENERATOR`（`stub` / `workers-ai`）で固定 HTML を返すスタブに切り替える。wrangler 設定の `vars` は本番値の `workers-ai`、ローカルは `.dev.vars` で `stub` に上書きする） | — | — |
 
 ### 選定理由
 
@@ -110,7 +110,8 @@ workers/
 ```
 
 - バインディングは `import { env } from "cloudflare:workers"` で取る（公式テンプレートの方式）。Cloudflare のドキュメントにある `context.cloudflare.env` は RR 7 時代の書き方で、v8 では load context に plain object を渡せないため動かない
-- タイトルは利用者が任意入力し、空ならプロンプトの先頭 N 文字を使う
+- タイトルは利用者が任意入力し、trim して空ならプロンプトの先頭 30 文字（コードポイント単位）を使う
+- 一覧は `created_at`（ミリ秒の Unix 時刻）の降順
 
 ### D1 と R2 の書き込み順と失敗時の契約
 
@@ -118,7 +119,7 @@ D1 と R2 を跨ぐ原子性はないので、「R2 の孤児は許容、D1 の�
 一覧に載るゲームは必ず遊べる状態を保ち、`/play/:id` は D1 に行があるときだけ R2 を返す。
 
 - 生成: `R2.put` → `D1 insert` の順。D1 が失敗したら `R2.delete` で補償し、エラーを返す。補償も失敗した場合は R2 に孤児が残るが、D1 に行がないので一覧にも `/play/:id` にも現れず、放置する
-- 削除: `D1 delete` → `R2 delete` の順。どちらも対象がなくても成功する（冪等）ので、R2 が失敗しても一覧からも `/play/:id` からも消えており、同じ ID で再実行すれば R2 も消える
+- 削除: `D1 delete` → `R2 delete` の順。D1 が失敗したら R2 には触れずエラーを返す。どちらも対象がなくても成功する（冪等）。R2 が失敗した場合はログに出して成功扱いにする。一覧からも `/play/:id` からも消えており、残った R2 は孤児として許容する（UI からの再試行経路は持たない）
 - 孤児の掃除は POC では行わない（1 ゲーム 50KB、Free 枠 10GB）。v2 以降の課題
 
 ### D1 スキーマ
@@ -138,14 +139,21 @@ CREATE TABLE games (
 - `<canvas>` + `requestAnimationFrame`、キーボードとタッチ両対応
 - スコア表示とリスタート、300 行以内、1 画面アーケードにスコープを縛る
 - 出力は `<!DOCTYPE html>` から始める。Markdown フェンス・説明文なし
-- 後処理で `<think>…</think>` とコードフェンスを除去し、`<!DOCTYPE` で始まらなければ 1 回だけリトライ。リトライも失敗したら何も保存せずエラーを返す
+- 思考は `chat_template_kwargs.enable_thinking: false` とプロンプトの両方で抑制する。`max_completion_tokens` は明示的に設定する
+- 後処理で前後の空白を trim し、`<think>…</think>` を除去し、コードフェンスがあれば中身だけを取り出す。その結果が `<!DOCTYPE` で始まらなければ失敗とする（前置きの説明文は切り落とさない）
+- 後処理の失敗、または `finish_reason` が `length`（出力が途中で切れた）の場合は 1 回だけリトライ。リトライも失敗したら何も保存せずエラーを返す。Workers AI 呼び出しの例外はリトライしない
 
 ### 安全性（POC 段階）
 
 - iframe は `sandbox="allow-scripts allow-pointer-lock"`（`allow-same-origin` を付けない → opaque origin）
-- `/play/:id` の CSP: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'`
-- 生成コードが外部通信・アプリ側の Cookie/storage に触れない状態を保つ
-- 公開 URL は Cloudflare Access の Worker 単位保護（ダッシュボードの「Protect this Worker behind Access」、All traffic）で本人のみに限定する。workers.dev / routes / preview をまとめて覆う。Worker 内での `Cf-Access-Jwt-Assertion` 検証は公式推奨だが、個人用 POC では行わない。ローカル `wrangler dev` には Access は掛からない
+- `/play/:id` の CSP: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; sandbox allow-scripts allow-pointer-lock; form-action 'none'; base-uri 'none'; frame-ancestors 'self'`
+  - `sandbox` ディレクティブは、`/play/:id` をタブで直接開いたときも opaque origin にするため
+- `/play/:id` のその他のヘッダ: `Content-Type: text/html; charset=utf-8`（R2 のメタデータに頼らない）、`X-Content-Type-Options: nosniff`、`Cache-Control: no-store`（削除後にキャッシュから配信されないように）
+- 生成コードがアプリ側の Cookie/storage に触れず、fetch / XHR / WebSocket で外部と通信できない状態を保つ。iframe の自己遷移（`location.href` の書き換え）による外部への送出は CSP で止められないが、持ち出す秘密がないため POC では許容する
+- 公開 URL は Cloudflare Access の Worker 単位保護（ダッシュボードの「Protect this Worker behind Access」、All traffic）で本人のみに限定する。Authentication policy は「Cloudflare account」を選ぶ（Email domain は使わない）。Access アプリの Cookie 設定は既定のまま変えない
+- Worker 単位の保護は workers.dev / routes / Custom Domains / Previews をまとめて覆う。POC は wrangler 設定で `workers_dev: true`、`preview_urls: false` とし、workers.dev だけを公開する
+- Worker 単位の保護では Access が Worker より前に必ず走るため、Worker 内での `Cf-Access-Jwt-Assertion` 検証は行わない。ローカル `wrangler dev` には Access は掛からない
+- デプロイから Access を掛けるまでの間は保護なしで公開される。この間は疎通確認に留め、生成は Access を掛けた後に行う
 
 ## 無料運用での注意
 

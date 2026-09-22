@@ -19,6 +19,12 @@
       "skillPath": "skills/productivity/grilling/SKILL.md",
       "computedHash": "4dd886b0196bf43729d954ae326016f2bd9f5f79d892500b407c33a753362f14"
     },
+    "pr": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/in-progress/pr/SKILL.md",
+      "computedHash": "169ba493271c91983d16d15fea8c05a38af849228c019d8b20c7d4d1a15765e4"
+    },
     "writing-for-agents": {
       "source": "mattpocock/skills",
       "sourceType": "github",

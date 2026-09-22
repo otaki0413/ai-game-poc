@@ -68,7 +68,7 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 - **Dynamic Workers を使わない**: Paid 専用（Open Beta）。POC のゲームはクライアント完結なので不要。サーバー側ロジック（スコア検証・マルチプレイ）が必要になった段階で導入する
 - **Durable Objects を使わない**: Free でも SQLite バックエンドなら使えるが、POC の要件にない
 - **D1 は生 SQL**: テーブル 1 つ・クエリ 4 種に ORM は不要。マイグレーションは `wrangler d1 migrations`。Drizzle は本開発でテーブルが増えてから
-- **Biome を選び Vite+ を見送る**: Vite+ は 2026-09 時点で 1.0 RC 直後。`vite.config.ts` と vitest の依存解決を乗っ取る構造で、`@cloudflare/vite-plugin` との dev サーバーハング（open issue）と `vitest-pool-workers` の Vitest 4 固定に当たる。1.0 安定後に再検討
+- **Biome を選び Vite+ を見送る**: Vite+ は 2026-09 時点で 1.0 RC 直後。`vite.config.ts` と vitest の依存解決を乗っ取る構造で、`@cloudflare/vite-plugin` との dev サーバーハング（open issue）と `@cloudflare/vitest-plugin` の Vitest 4 固定に当たる。1.0 安定後に再検討
 - **ゲーム ID は `crypto.randomUUID()`**: 依存ゼロで衝突を考えない。R2 キーと URL に共用
 - **UI は素の Tailwind**: 画面 2 つにコンポーネントライブラリは不要。見た目は完了条件に含まれない
 

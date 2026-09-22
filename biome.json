@@ -1,0 +1,25 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"includes": [
+			"**",
+			"!worker-configuration.d.ts",
+			"!.react-router",
+			"!build",
+			"!.wrangler",
+			"!skills-lock.json",
+			"!.claude/settings.local.json"
+		],
+		"ignoreUnknown": true
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	}
+}

@@ -7,9 +7,6 @@
 	"name": "ai-game-poc",
 	"compatibility_date": "2026-09-16",
 	"main": "./workers/app.ts",
-	"vars": {
-		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
-	},
 	"observability": {
 		"enabled": true
 	},

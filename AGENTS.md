@@ -14,3 +14,13 @@ AI でブラウザゲームを生成し、一覧から遊べる CtoC プラッ�
 
 - 生成ゲームの配信 (`/play/:id`) は CSP 付き、埋め込み iframe は `sandbox="allow-scripts allow-pointer-lock"` のみ（`allow-same-origin` は付けない）。ヘッダ値は poc-plan.md の「安全性」節が正本
 - 用語は `CONTEXT.md` に従う。設計判断を変えたら `docs/adr/` に ADR を残す。どちらも最初の項目が出た時点で作る
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues（`gh` CLI）。See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+single-context（ルートの `CONTEXT.md` + `docs/adr/`）。See `docs/agents/domain.md`.

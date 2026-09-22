@@ -162,7 +162,7 @@ CREATE TABLE games (
 | v1 | `window.GameSDK.submitScore()`（postMessage）+ D1 `scores`。ゲームがプラットフォームに何かを伝える最初の経路 |
 | v2 | `*.play.example.com` ワイルドカードでゲームごとにオリジン分離、他人に見せる場合の認証 |
 | v3 (Paid) | サーバー側ロジックが必要なゲーム → Dynamic Workers / DO Facets |
-| v4 | Vectorize でセマンティック検索、Workflows で生成の非同期化、AI Gateway でコスト可視化、Stripe |
+| v4 | Vectorize でセマンティック検索、Workflows で生成の非同期化、Stripe |
 
 ## Paid プランに移行した場合に変わること（参考。POC では移行しない）
 

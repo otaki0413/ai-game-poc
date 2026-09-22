@@ -1,26 +1,16 @@
 # ai-game-poc
 
 AI でブラウザゲームを生成し、一覧から遊べる CtoC プラットフォームの個人用 POC。
-設計の正本は [docs/poc-plan.md](docs/poc-plan.md)。判断を変えたらそちらを更新する。
+計画・スタック・ルート設計の正本は [docs/poc-plan.md](docs/poc-plan.md)。判断を変えたらそちらを更新する。
 
 ## 前提
 
-- Cloudflare **Free プランの範囲に閉じる**。Paid 専用機能（Dynamic Workers, Queues 等）は使わない
-- LLM は Workers AI（`@cf/zai-org/glm-4.7-flash`）。Claude API への差し替えは `app/lib/generate.server.ts` の呼び出し部分だけで済む構造を保つ
+- Cloudflare Free プランの範囲に閉じる。Paid 専用機能（Dynamic Workers, Queues, Paid 限定の Workers AI モデル）は候補から外す
+- LLM は Workers AI（`@cf/zai-org/glm-4.7-flash`）。呼び出しは `app/lib/generate.server.ts` に閉じ込め、Claude API への差し替えがそのファイルの変更だけで済む構造を保つ
 - 生成ゲームはクライアント完結の単一 HTML。サーバー側ロジックは持たせない
-- 個人用なので認証・課金・マルチプレイは対象外
-
-## スタック
-
-React Router (framework mode, SSR) + `@cloudflare/vite-plugin` + Tailwind / Hono (`workers/app.ts`) / D1 / R2 / Workers AI / pnpm / Wrangler
-
-## コマンド
-
-- `pnpm dev` — ローカル開発（D1/R2/AI はエミュレート）
-- `pnpm typecheck` — `wrangler types` + `react-router typegen` + `tsc -b`
-- `pnpm deploy` — build + `wrangler deploy`
+- 個人用。認証・課金・マルチプレイは対象外
 
 ## 規約
 
-- 生成ゲームの配信 (`/play/:id`) は必ず CSP 付き、埋め込み iframe は `allow-same-origin` を付けない
-- `.dev.vars` / `worker-configuration.d.ts` はコミットしない（.gitignore 済み）
+- 生成ゲームの配信 (`/play/:id`) は CSP 付き、埋め込み iframe は `sandbox="allow-scripts allow-pointer-lock"` のみ（`allow-same-origin` は付けない）。ヘッダ値は poc-plan.md の「安全性」節が正本
+- 用語は `CONTEXT.md` に従う。設計判断を変えたら `docs/adr/` に ADR を残す。どちらも最初の項目が出た時点で作る

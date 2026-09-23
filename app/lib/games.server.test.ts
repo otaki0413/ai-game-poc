@@ -1,7 +1,7 @@
 import { applyD1Migrations, env } from "cloudflare:test";
 import type { D1Migration } from "@cloudflare/vitest-plugin";
-import { afterEach, beforeAll, describe, expect, inject, it } from "vitest";
-import { listGames, saveGame } from "./games.server";
+import { afterEach, beforeAll, describe, expect, inject, it, vi } from "vitest";
+import { deleteGame, getGame, listGames, saveGame } from "./games.server";
 
 declare module "vitest" {
 	interface ProvidedContext {
@@ -88,5 +88,73 @@ describe("saveGame", () => {
 				created_at: 1000,
 			},
 		]);
+	});
+});
+
+describe("deleteGame", () => {
+	async function saveFixture(): Promise<string> {
+		const id = crypto.randomUUID();
+		objectIds.push(id);
+		await saveGame(env, {
+			id,
+			title: "消すゲーム",
+			prompt: "星を集める",
+			created_at: 1000,
+			html: "<!DOCTYPE html><title>doomed</title>",
+		});
+		return id;
+	}
+
+	it("D1 と R2 の両方から消す", async () => {
+		const id = await saveFixture();
+
+		await deleteGame(env, id);
+
+		expect(await getGame(env.DB, id)).toBeNull();
+		expect(await env.GAMES.get(`games/${id}.html`)).toBeNull();
+	});
+
+	it("存在しない ID でも成功する", async () => {
+		await expect(deleteGame(env, crypto.randomUUID())).resolves.toBeUndefined();
+	});
+
+	it("R2 の delete が失敗しても D1 から消えて成功扱いになる", async () => {
+		const id = await saveFixture();
+		const GAMES = {
+			delete: vi.fn().mockRejectedValue(new Error("R2 down")),
+		} as unknown as R2Bucket;
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+
+		await expect(
+			deleteGame({ DB: env.DB, GAMES }, id),
+		).resolves.toBeUndefined();
+
+		expect(GAMES.delete).toHaveBeenCalledWith(`games/${id}.html`);
+		expect(consoleError).toHaveBeenCalledOnce();
+		expect(await getGame(env.DB, id)).toBeNull();
+		expect(await (await env.GAMES.get(`games/${id}.html`))?.text()).toBe(
+			"<!DOCTYPE html><title>doomed</title>",
+		);
+		consoleError.mockRestore();
+	});
+
+	it("D1 の delete が失敗したら R2 には触れずエラーになる", async () => {
+		const id = await saveFixture();
+		const DB = {
+			prepare: () => ({
+				bind: () => ({
+					run: vi.fn().mockRejectedValue(new Error("D1 down")),
+				}),
+			}),
+		} as unknown as D1Database;
+		const GAMES = { delete: vi.fn() } as unknown as R2Bucket;
+
+		await expect(deleteGame({ DB, GAMES }, id)).rejects.toThrow("D1 down");
+
+		expect(GAMES.delete).not.toHaveBeenCalled();
+		expect(await getGame(env.DB, id)).not.toBeNull();
+		expect(await env.GAMES.get(`games/${id}.html`)).not.toBeNull();
 	});
 });

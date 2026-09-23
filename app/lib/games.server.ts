@@ -62,3 +62,19 @@ export async function saveGame(
 		throw error;
 	}
 }
+
+// D1 → R2 の順に消す。D1 が失敗したら R2 には触れず投げる。
+// R2 の失敗はログに出して成功扱い（残ったオブジェクトは孤児として許容）。
+// どちらも対象がなくても成功する（冪等）。契約の正本は docs/poc-plan.md
+export async function deleteGame(
+	{ DB, GAMES }: GameBindings,
+	id: string,
+): Promise<void> {
+	await DB.prepare("DELETE FROM games WHERE id = ?").bind(id).run();
+
+	try {
+		await GAMES.delete(gameKey(id));
+	} catch (error) {
+		console.error("R2 delete failed after D1 delete", error);
+	}
+}

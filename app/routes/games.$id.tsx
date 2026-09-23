@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { data, Form, Link, redirect, useNavigation } from "react-router";
 import { deleteGame, getGame } from "../lib/games.server";
+import { isSameOriginRequest } from "../lib/same-origin";
 import type { Route } from "./+types/games.$id";
 
 export const meta: Route.MetaFunction = ({ loaderData }) => [
@@ -19,9 +20,7 @@ export async function loader({ params }: Route.LoaderArgs) {
 
 // 存在チェックはしない。削除済み・存在しない ID でも削除を実行してホームに戻る
 export async function action({ request, params }: Route.ActionArgs) {
-	// Access の CF_Authorization Cookie はクロスサイト POST にも付くので、
-	// 同一オリジンからの送信だけを受け付ける（docs/poc-plan.md「安全性」節）
-	if (request.headers.get("Origin") !== new URL(request.url).origin) {
+	if (!isSameOriginRequest(request)) {
 		throw data(null, { status: 403, statusText: "Forbidden" });
 	}
 

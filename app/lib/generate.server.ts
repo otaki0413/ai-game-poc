@@ -89,7 +89,9 @@ const SYSTEM_PROMPT = `あなたはブラウザゲームを作るプログラマ
 - HTML 全体で 300 行以内に収める
 - 画面の文言は利用者の指示と同じ言語で書く`;
 
-type GenerateBindings = Pick<Env, "AI" | "GENERATOR">;
+// wrangler types は GENERATOR を本番値のリテラル "workers-ai" で生成するが、
+// ローカルは .dev.vars で "stub" に上書きするので実行時の値は string として扱う
+type GenerateBindings = Pick<Env, "AI"> & { GENERATOR: string };
 
 // LLM 呼び出しはこのモジュールに閉じ込める。Claude API に差し替えるときはここだけを変える
 export async function generateGameHtml(

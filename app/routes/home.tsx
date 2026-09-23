@@ -52,7 +52,7 @@ export async function action({ request }: Route.ActionArgs) {
 	const { prompt } = parsed.output;
 	const title = parsed.output.title || Array.from(prompt).slice(0, 30).join("");
 	try {
-		const html = generateGameHtml(env.GENERATOR);
+		const html = await generateGameHtml(env, prompt);
 		await saveGame(env, {
 			id: crypto.randomUUID(),
 			title,

@@ -1,3 +1,5 @@
+import { extractGameHtml } from "./postprocess";
+
 const STUB_GAME_HTML = `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -59,7 +61,70 @@ const STUB_GAME_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-export function generateGameHtml(generator: string): string {
-	if (generator === "stub") return STUB_GAME_HTML;
-	throw new Error(`Generator "${generator}" is not implemented`);
+const MODEL = "@cf/zai-org/glm-4.7-flash";
+// 300 行の HTML は 4,000〜6,000 トークン程度。倍の余裕を取り、1 回あたり最大 ≈ 300 Neurons に抑える
+const MAX_COMPLETION_TOKENS = 8192;
+const MAX_ATTEMPTS = 2;
+
+const SYSTEM_PROMPT = `あなたはブラウザゲームを作るプログラマーです。利用者の指示から、ブラウザでそのまま遊べるゲームを 1 つ作ってください。
+
+# 出力形式
+- 完成した HTML 文書だけを出力する。1 文字目は <!DOCTYPE html> にする
+- Markdown のコードフェンス、前置き、説明文、補足は一切書かない
+- 考える過程や思考は出力しない。すぐに HTML を書き始める
+
+# 技術的な制約
+- 単一の HTML ファイルで完結させる。CSS は <style>、JavaScript は <script> にインラインで書く
+- 外部 URL を一切参照しない（CDN、画像、フォント、スクリプトを含む）。画像や音が必要なら Canvas で描く
+- fetch、XMLHttpRequest、WebSocket など通信する API を使わない
+- localStorage、sessionStorage、IndexedDB、Cookie を使わない
+- alert、confirm、prompt、フォーム送信を使わない
+- 描画は <canvas> に行い、ゲームループは requestAnimationFrame で回す
+- キーボードとタッチ（またはポインター）の両方で操作できるようにする
+
+# ゲームの範囲
+- 1 画面で完結するシンプルなアーケードゲームにする
+- 画面にスコアを表示する
+- ゲームオーバー後にリスタートできるようにする
+- HTML 全体で 300 行以内に収める
+- 画面の文言は利用者の指示と同じ言語で書く`;
+
+type GenerateBindings = Pick<Env, "AI" | "GENERATOR">;
+
+// LLM 呼び出しはこのモジュールに閉じ込める。Claude API に差し替えるときはここだけを変える
+export async function generateGameHtml(
+	{ AI, GENERATOR }: GenerateBindings,
+	prompt: string,
+): Promise<string> {
+	if (GENERATOR === "stub") return STUB_GAME_HTML;
+	if (GENERATOR !== "workers-ai") {
+		throw new Error(`Generator "${GENERATOR}" is not implemented`);
+	}
+
+	// Workers AI 呼び出しの例外（Neurons 上限、5xx など）はリトライせずそのまま投げる
+	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+		const result = await AI.run(
+			MODEL,
+			{
+				messages: [
+					{ role: "system", content: SYSTEM_PROMPT },
+					{ role: "user", content: prompt },
+				],
+				max_completion_tokens: MAX_COMPLETION_TOKENS,
+				chat_template_kwargs: { enable_thinking: false },
+			},
+			{ gateway: { id: "default" } },
+		);
+		const choice = result.choices[0];
+		const html =
+			choice?.finish_reason === "length"
+				? null
+				: extractGameHtml(choice?.message.content ?? "");
+		if (html) return html;
+		console.warn("Generated output was rejected", {
+			attempt,
+			finishReason: choice?.finish_reason,
+		});
+	}
+	throw new Error(`Generation failed after ${MAX_ATTEMPTS} attempts`);
 }

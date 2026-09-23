@@ -1,6 +1,6 @@
 # AI ゲーム生成 CtoC プラットフォーム POC 計画
 
-作成日: 2026-09-22 / 最終更新: 2026-09-23（チケット化レビューの結果を反映）
+作成日: 2026-09-22 / 最終更新: 2026-09-23（#9 のレビュー結果を反映）
 
 設計判断の記録は [docs/adr/](adr/)、用語は [CONTEXT.md](../CONTEXT.md)。
 
@@ -58,7 +58,7 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 | フォーム検証 | valibot（action の入力 2 フィールドのみ） | — | — |
 | lint / format | Biome（`biome.json` 1 枚、`pnpm check`）。pre-commit フックは入れない | — | — |
 | テスト | Vitest 4 + `@cloudflare/vitest-plugin`（workerd 上で実行。プラグインの peer 依存のため Vitest は 4 系に固定）。対象は生成後処理の純関数、生成のリトライ、D1 / R2 への保存・取得・削除（失敗時の契約を含む）。D1 insert の失敗は本物の制約違反（ID の重複）で起こす。D1 delete と R2 の失敗は、現行スキーマでは本物のバインディングで起こせないため、例外を投げるラッパーの注入で起こす。そのため保存・生成のモジュールはバインディングを引数で受け取る | — | — |
-| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数 `GENERATOR`（`stub` / `workers-ai`）で固定 HTML を返すスタブに切り替える。wrangler 設定の `vars` は本番値の `workers-ai`、ローカルは `.dev.vars` で `stub` に上書きする） | — | — |
+| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数 `GENERATOR`（`stub` / `workers-ai`）で固定 HTML を返すスタブに切り替える。wrangler 設定の `vars` は本番値の `workers-ai`、ローカルは `.dev.vars` で `stub` に上書きする。AI バインディングは起動時にリモート接続を張るため、`stub` でも `pnpm dev` には `wrangler login` が必要。テストは `remoteBindings: false` にしてフェイクを注入し、接続しない） | — | — |
 
 ### 選定理由
 
@@ -103,7 +103,7 @@ app/
     play.$id.tsx        # resource route: D1 に行があるときだけ R2 から HTML を返す。なければ 404（loader が Response を返す）
   lib/
     generate.server.ts  # LLM 呼び出し + 後処理。環境変数で Workers AI / スタブを切り替える
-    postprocess.ts      # 純関数: <think> 除去、フェンス除去、DOCTYPE 判定。Vitest の対象
+    postprocess.ts      # 純関数: 先頭の <think> 除去、全体を囲むフェンスの除去、DOCTYPE 判定。Vitest の対象
     games.server.ts     # D1 / R2 への保存・取得・削除
 workers/
   app.ts                # Worker エントリ。RR の createRequestHandler を呼ぶだけ
@@ -140,7 +140,7 @@ CREATE TABLE games (
 - スコア表示とリスタート、300 行以内、1 画面アーケードにスコープを縛る
 - 出力は `<!DOCTYPE html>` から始める。Markdown フェンス・説明文なし
 - 思考は `chat_template_kwargs.enable_thinking: false` とプロンプトの両方で抑制する。`max_completion_tokens` は明示的に設定する
-- 後処理で前後の空白を trim し、`<think>…</think>` を除去し、コードフェンスがあれば中身だけを取り出す。その結果が `<!DOCTYPE` で始まらなければ失敗とする（前置きの説明文は切り落とさない）
+- 後処理で前後の空白を trim し、先頭の `<think>…</think>` を除去し、出力全体がコードフェンスで囲まれていれば中身だけを取り出す。その結果が `<!DOCTYPE` で始まらなければ失敗とする（フェンスの前後を含め、説明文は切り落とさない）。HTML の本文や JS 文字列に含まれる `<think>` やフェンス記号には触れない
 - 後処理の失敗、または `finish_reason` が `length`（出力が途中で切れた）の場合は 1 回だけリトライ。リトライも失敗したら何も保存せずエラーを返す。Workers AI 呼び出しの例外はリトライしない
 
 ### 安全性（POC 段階）
@@ -150,7 +150,7 @@ CREATE TABLE games (
   - `sandbox` ディレクティブは、`/play/:id` をタブで直接開いたときも opaque origin にするため
 - `/play/:id` のその他のヘッダ: `Content-Type: text/html; charset=utf-8`（R2 のメタデータに頼らない）、`X-Content-Type-Options: nosniff`、`Cache-Control: no-store`（削除後にキャッシュから配信されないように）
 - 生成コードがアプリ側の Cookie/storage に触れず、fetch / XHR / WebSocket で外部と通信できない状態を保つ。iframe の自己遷移（`location.href` の書き換え）による外部への送出は CSP で止められないが、持ち出す秘密がないため POC では許容する
-- 状態を変える action（削除）は `Origin` ヘッダがリクエスト URL のオリジンと厳密に一致するときだけ実行し、それ以外は 403 を返す。Access の `CF_Authorization` Cookie は既定でクロスサイトの POST にも付くため、Cookie 設定ではなく Worker 側で防ぐ
+- 状態を変える action（生成・削除）は `Origin` ヘッダがリクエスト URL のオリジンと厳密に一致するときだけ実行し、それ以外は 403 を返す（`app/lib/same-origin.ts`）。生成は Neurons を消費するため、クロスサイトから Free 枠を使い切られないようにする意味もある。Access の `CF_Authorization` Cookie は既定でクロスサイトの POST にも付くため、Cookie 設定ではなく Worker 側で防ぐ
 - 公開 URL は Cloudflare Access の Worker 単位保護（ダッシュボードの「Protect this Worker behind Access」、All traffic）で本人のみに限定する。Authentication policy は「Cloudflare account」を選ぶ（Email domain は使わない）。Access アプリの Cookie 設定は既定のまま変えない
 - Worker 単位の保護は workers.dev / routes / Custom Domains / Previews をまとめて覆う。POC は wrangler 設定で `workers_dev: true`、`preview_urls: false` とし、workers.dev だけを公開する
 - Worker 単位の保護では Access が Worker より前に必ず走るため、Worker 内での `Cf-Access-Jwt-Assertion` 検証は行わない。ローカル `wrangler dev` には Access は掛からない

@@ -3,6 +3,7 @@ import { data, Form, Link, redirect, useNavigation } from "react-router";
 import * as v from "valibot";
 import { listGames, saveGame } from "../lib/games.server";
 import { generateGameHtml } from "../lib/generate.server";
+import { isSameOriginRequest } from "../lib/same-origin";
 import type { Route } from "./+types/home";
 
 export const meta: Route.MetaFunction = () => [{ title: "AI Game POC" }];
@@ -35,6 +36,11 @@ export async function loader() {
 }
 
 export async function action({ request }: Route.ActionArgs) {
+	// 生成は Neurons を消費するので、削除と同じく同一オリジンからの送信だけを受け付ける
+	if (!isSameOriginRequest(request)) {
+		throw data(null, { status: 403, statusText: "Forbidden" });
+	}
+
 	const formData = await request.formData();
 	const input = {
 		prompt: formData.get("prompt"),
@@ -52,7 +58,7 @@ export async function action({ request }: Route.ActionArgs) {
 	const { prompt } = parsed.output;
 	const title = parsed.output.title || Array.from(prompt).slice(0, 30).join("");
 	try {
-		const html = generateGameHtml(env.GENERATOR);
+		const html = await generateGameHtml(env, prompt);
 		await saveGame(env, {
 			id: crypto.randomUUID(),
 			title,

@@ -26,7 +26,10 @@
 			"binding": "GAMES",
 			"bucket_name": "ai-game-poc-games"
 		}
-	]
+	],
+	"ai": {
+		"binding": "AI"
+	}
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

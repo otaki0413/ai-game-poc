@@ -2,7 +2,13 @@ import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-	plugins: [cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })],
+	plugins: [
+		// AI バインディングはリモート専用。テストはフェイクを注入するので接続しない
+		cloudflareTest({
+			wrangler: { configPath: "./wrangler.jsonc" },
+			remoteBindings: false,
+		}),
+	],
 	resolve: {
 		tsconfigPaths: true,
 	},

@@ -1,79 +1,25 @@
-# Welcome to React Router!
+# AI Game POC
 
-A modern, production-ready template for building full-stack React applications using React Router.
+プロンプトからブラウザゲームを生成し、一覧から遊べる個人用 POC。構成と実装予定は [docs/poc-plan.md](docs/poc-plan.md) を参照してください。
 
-## Features
+## ローカルで動かす
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
-
-## Getting Started
-
-### Installation
-
-Install the dependencies:
-
-```bash
-npm install
-```
-
-### Development
-
-Start the development server with HMR:
-
-```bash
-npm run dev
-```
-
-Your application will be available at `http://localhost:5173`.
-
-## Previewing the Production Build
-
-Preview the production build locally:
-
-```bash
-npm run preview
-```
-
-## Building for Production
-
-Create a production build:
-
-```bash
-npm run build
-```
-
-## Deployment
-
-Deployment is done using the Wrangler CLI.
-
-To build and deploy directly to production:
+Node.js と pnpm が必要です。
 
 ```sh
-npm run deploy
+pnpm install
+cp .dev.vars.example .dev.vars
+pnpm exec wrangler d1 migrations apply ai-game-poc-db --local
+pnpm dev
 ```
 
-To deploy a preview URL:
+`http://localhost:5173` を開きます。`.dev.vars` の `GENERATOR=stub` により、現在は固定 HTML のゲームを生成します。`.dev.vars` は Git 管理の対象外です。ローカルの D1 と R2 は Wrangler がエミュレートします。
+
+## 確認
 
 ```sh
-npx wrangler versions upload
+pnpm check
+pnpm typecheck
+pnpm test
+pnpm build
 ```
-
-You can then promote a version to production after verification or roll it out progressively.
-
-```sh
-npx wrangler versions deploy
-```
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
-
----
-
-Built with ❤️ using React Router.

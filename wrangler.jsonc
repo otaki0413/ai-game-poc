@@ -10,7 +10,23 @@
 	"observability": {
 		"enabled": true
 	},
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	"vars": {
+		"GENERATOR": "workers-ai"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ai-game-poc-db",
+			"database_id": "00000000-0000-0000-0000-000000000000"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "GAMES",
+			"bucket_name": "ai-game-poc-games"
+		}
+	]
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

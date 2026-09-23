@@ -11,6 +11,8 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
+	"workers_dev": true,
+	"preview_urls": false,
 	"vars": {
 		"GENERATOR": "workers-ai"
 	},
@@ -18,7 +20,7 @@
 		{
 			"binding": "DB",
 			"database_name": "ai-game-poc-db",
-			"database_id": "00000000-0000-0000-0000-000000000000"
+			"database_id": "6affe8a1-9280-43f0-bf28-6ca0e661700a"
 		}
 	],
 	"r2_buckets": [

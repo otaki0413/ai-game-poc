@@ -21,6 +21,17 @@ pnpm dev
 
 テスト（`pnpm test`）は AI バインディングにフェイクを使い、Cloudflare に接続しません。
 
+## デプロイ
+
+workers.dev（`https://ai-game-poc.otaki0413-it.workers.dev`）にデプロイします。本番の D1（`ai-game-poc-db`）と R2（`ai-game-poc-games`）は作成済みです。`pnpm run deploy` はコードだけを再デプロイするので、マイグレーションを足したときは先に `db:migrate:remote` を実行します。`pnpm deploy` は pnpm の組み込みコマンドなので使いません。
+
+```sh
+pnpm run db:migrate:remote
+pnpm run deploy
+```
+
+本番の `GENERATOR` は wrangler 設定の `vars` にある `workers-ai` です。公開 URL は Cloudflare Access で本人だけに限定します。
+
 ## 確認
 
 ```sh

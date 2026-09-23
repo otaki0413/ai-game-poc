@@ -7,6 +7,7 @@
 		"dev": "react-router dev",
 		"typecheck": "wrangler types && react-router typegen && tsc -b",
 		"deploy": "pnpm run build && wrangler deploy",
+		"db:migrate:remote": "wrangler d1 migrations apply ai-game-poc-db --remote",
 		"preview": "pnpm run build && vite preview",
 		"cf-typegen": "wrangler types",
 		"postinstall": "wrangler types",

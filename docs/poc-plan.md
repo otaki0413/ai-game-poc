@@ -150,6 +150,7 @@ CREATE TABLE games (
   - `sandbox` ディレクティブは、`/play/:id` をタブで直接開いたときも opaque origin にするため
 - `/play/:id` のその他のヘッダ: `Content-Type: text/html; charset=utf-8`（R2 のメタデータに頼らない）、`X-Content-Type-Options: nosniff`、`Cache-Control: no-store`（削除後にキャッシュから配信されないように）
 - 生成コードがアプリ側の Cookie/storage に触れず、fetch / XHR / WebSocket で外部と通信できない状態を保つ。iframe の自己遷移（`location.href` の書き換え）による外部への送出は CSP で止められないが、持ち出す秘密がないため POC では許容する
+- 状態を変える action（削除）は `Origin` ヘッダがリクエスト URL のオリジンと厳密に一致するときだけ実行し、それ以外は 403 を返す。Access の `CF_Authorization` Cookie は既定でクロスサイトの POST にも付くため、Cookie 設定ではなく Worker 側で防ぐ
 - 公開 URL は Cloudflare Access の Worker 単位保護（ダッシュボードの「Protect this Worker behind Access」、All traffic）で本人のみに限定する。Authentication policy は「Cloudflare account」を選ぶ（Email domain は使わない）。Access アプリの Cookie 設定は既定のまま変えない
 - Worker 単位の保護は workers.dev / routes / Custom Domains / Previews をまとめて覆う。POC は wrangler 設定で `workers_dev: true`、`preview_urls: false` とし、workers.dev だけを公開する
 - Worker 単位の保護では Access が Worker より前に必ず走るため、Worker 内での `Cf-Access-Jwt-Assertion` 検証は行わない。ローカル `wrangler dev` には Access は掛からない

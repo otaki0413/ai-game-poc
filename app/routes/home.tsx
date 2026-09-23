@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { data, Form, redirect, useNavigation } from "react-router";
+import { data, Form, Link, redirect, useNavigation } from "react-router";
 import * as v from "valibot";
 import { listGames, saveGame } from "../lib/games.server";
 import { generateGameHtml } from "../lib/generate.server";
@@ -163,16 +163,18 @@ export default function Home({ loaderData, actionData }: Route.ComponentProps) {
 					) : (
 						<ul className="grid gap-4 sm:grid-cols-2">
 							{loaderData.games.map((game) => (
-								<li
-									key={game.id}
-									className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-								>
-									<h3 className="text-lg font-semibold wrap-break-word">
-										{game.title}
-									</h3>
-									<p className="mt-2 line-clamp-3 text-sm text-slate-600 wrap-break-word">
-										{game.prompt}
-									</p>
+								<li key={game.id}>
+									<Link
+										to={`/games/${game.id}`}
+										className="block h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:border-indigo-300 hover:shadow-md"
+									>
+										<h3 className="text-lg font-semibold wrap-break-word">
+											{game.title}
+										</h3>
+										<p className="mt-2 line-clamp-3 text-sm text-slate-600 wrap-break-word">
+											{game.prompt}
+										</p>
+									</Link>
 								</li>
 							))}
 						</ul>

@@ -16,11 +16,35 @@ export async function listGames(db: D1Database): Promise<Game[]> {
 	return result.results;
 }
 
+export async function getGame(
+	db: D1Database,
+	id: string,
+): Promise<Game | null> {
+	return db
+		.prepare("SELECT id, title, prompt, created_at FROM games WHERE id = ?")
+		.bind(id)
+		.first<Game>();
+}
+
+// D1 に行がないゲームは R2 に HTML が残っていても返さない（R2 の孤児を配信しない）
+export async function getGameHtml(
+	{ DB, GAMES }: GameBindings,
+	id: string,
+): Promise<ReadableStream | null> {
+	if (!(await getGame(DB, id))) return null;
+	const object = await GAMES.get(gameKey(id));
+	return object?.body ?? null;
+}
+
+function gameKey(id: string): string {
+	return `games/${id}.html`;
+}
+
 export async function saveGame(
 	{ DB, GAMES }: GameBindings,
 	game: Game & { html: string },
 ): Promise<void> {
-	const key = `games/${game.id}.html`;
+	const key = gameKey(game.id);
 	await GAMES.put(key, game.html);
 
 	try {

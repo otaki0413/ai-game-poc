@@ -37,12 +37,34 @@ describe("extractGameHtml", () => {
 		).toBe(HTML);
 	});
 
-	it("コードフェンスがあれば、その外側の説明文は使わない", () => {
+	it("HTML の中にある <think> は取り除かない", () => {
+		const html =
+			"<!DOCTYPE html><script>const tag = '<think>x</think>';</script>";
+		expect(extractGameHtml(html)).toBe(html);
+	});
+
+	it("HTML の中にある ``` をフェンスとして扱わない", () => {
+		const html = "<!DOCTYPE html><pre>```js\nlet a = 1;\n```</pre>";
+		expect(extractGameHtml(html)).toBe(html);
+	});
+
+	it("全体を囲むフェンスの中に ``` があっても最後のフェンスまでを取り出す", () => {
+		const html = "<!DOCTYPE html><pre>```js\nlet a = 1;\n```</pre>";
+		expect(extractGameHtml(`\`\`\`html\n${html}\n\`\`\``)).toBe(html);
+	});
+
+	it("フェンスの前に説明文があれば失敗にする", () => {
 		expect(
 			extractGameHtml(
-				`こちらが生成したゲームです。\n\`\`\`html\n${HTML}\n\`\`\`\n楽しんでください。`,
+				`こちらが生成したゲームです。\n\`\`\`html\n${HTML}\n\`\`\``,
 			),
-		).toBe(HTML);
+		).toBeNull();
+	});
+
+	it("フェンスの後に説明文があれば失敗にする", () => {
+		expect(
+			extractGameHtml(`\`\`\`html\n${HTML}\n\`\`\`\n楽しんでください。`),
+		).toBeNull();
 	});
 
 	it("フェンスのない前置きの説明文があれば切り落とさず失敗にする", () => {

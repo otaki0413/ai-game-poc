@@ -1,6 +1,6 @@
 # AI ゲーム生成 CtoC プラットフォーム POC 計画
 
-作成日: 2026-09-22 / 最終更新: 2026-09-23（#9 のレビュー結果を反映）
+作成日: 2026-09-22 / 最終更新: 2026-09-23（#19 で生成プロンプトに開始経路を追加）
 
 設計判断の記録は [docs/adr/](adr/)、用語は [CONTEXT.md](../CONTEXT.md)。
 
@@ -58,7 +58,7 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 | フォーム検証 | valibot（action の入力 2 フィールドのみ） | — | — |
 | lint / format | Biome（`biome.json` 1 枚、`pnpm check`）。pre-commit フックは入れない | — | — |
 | テスト | Vitest 4 + `@cloudflare/vitest-plugin`（workerd 上で実行。プラグインの peer 依存のため Vitest は 4 系に固定）。対象は生成後処理の純関数、生成のリトライ、D1 / R2 への保存・取得・削除（失敗時の契約を含む）。D1 insert の失敗は本物の制約違反（ID の重複）で起こす。D1 delete と R2 の失敗は、現行スキーマでは本物のバインディングで起こせないため、例外を投げるラッパーの注入で起こす。そのため保存・生成のモジュールはバインディングを引数で受け取る | — | — |
-| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数 `GENERATOR`（`stub` / `workers-ai`）で固定 HTML を返すスタブに切り替える。wrangler 設定の `vars` は本番値の `workers-ai`、ローカルは `.dev.vars` で `stub` に上書きする。AI バインディングは起動時にリモート接続を張るため、`stub` でも `pnpm dev` には `wrangler login` が必要。テストは `remoteBindings: false` にしてフェイクを注入し、接続しない） | — | — |
+| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数 `GENERATOR`（`stub` / `workers-ai`）で固定 HTML を返すスタブに切り替える。wrangler 設定の `vars` は本番値の `workers-ai`、ローカルは `.dev.vars` で `stub` に上書きする。AI バインディングは起動時にリモート接続を張るため、`stub` でも `pnpm dev` には `wrangler login` が必要。リモート接続先は workers.dev 上に立ち、Worker 単位の Access がそこも保護するため、初回起動時のブラウザでの Access 承認も必要。承認は Wrangler が `cloudflared access login` を呼んで行うため、`cloudflared` をインストールしておく（ないと `To use Wrangler with Cloudflare Access, please install cloudflared` で起動が止まる）。非対話環境では Access のサービストークンがないと起動できない。テストは `remoteBindings: false` にしてフェイクを注入し、接続しない） | — | — |
 
 ### 選定理由
 
@@ -137,7 +137,15 @@ CREATE TABLE games (
 
 - 単一 HTML、インライン CSS/JS のみ、外部 URL / fetch / WebSocket / localStorage 禁止
 - `<canvas>` + `requestAnimationFrame`、キーボードとタッチ両対応
-- スコア表示とリスタート、300 行以内、1 画面アーケードにスコープを縛る
+- canvas は width / height 属性で固定サイズにし、CSS で拡大縮小する。sandbox 付き iframe では読み込み直後に `innerWidth` / `innerHeight` が 0 になることがあり、そこからグリッドを作ったゲームが無限ループした（#19 の検証）。ポインター座標は `getBoundingClientRect()` で換算する
+- スコア表示、300 行以内、1 画面アーケードにスコープを縛る
+- 開始経路を必ず持たせるため、ゲームの骨格を指定する（#19）
+  - 状態は `ready` / `playing` / `over` の 1 変数。読み込み直後は `ready`
+  - `requestAnimationFrame` のループはスクリプト末尾で 1 回だけ起動し、状態に関係なく回し続ける
+  - `ready` と `over` では開始方法を canvas に描き、クリック・タップ・Space・Enter で同じ `startGame()` を呼ぶ（初回とリスタートを共通化）。開始用の HTML 要素（ボタン、`display: none` の画面）は作らない
+  - ゲームの状態は `resetGame()` ですべて作り直し、読み込み時にもループ起動前に 1 回呼ぶ（`ready` 画面の描画が未初期化の配列に触れて例外になり、ループが止まるのを防ぐ）。`startGame()` は `resetGame()` の後に `playing` にする
+  - 時間経過の処理はループ内で経過時間から行い、`setInterval` / `setTimeout` は使わない
+  - キーは `window` の keydown / keyup で受け、ハンドラは関数を呼び出す形で書く
 - 出力は `<!DOCTYPE html>` から始める。Markdown フェンス・説明文なし
 - 思考は `chat_template_kwargs.enable_thinking: false` とプロンプトの両方で抑制する。`max_completion_tokens` は明示的に設定する
 - 後処理で前後の空白を trim し、先頭の `<think>…</think>` を除去し、出力全体がコードフェンスで囲まれていれば中身だけを取り出す。その結果が `<!DOCTYPE` で始まらなければ失敗とする（フェンスの前後を含め、説明文は切り落とさない）。HTML の本文や JS 文字列に含まれる `<think>` やフェンス記号には触れない

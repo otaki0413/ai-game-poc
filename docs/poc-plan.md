@@ -58,7 +58,7 @@ Stripe / Web Components / Zod / pnpm workspaces / Vitest / Wrangler。
 | フォーム検証 | valibot（action の入力 2 フィールドのみ） | — | — |
 | lint / format | Biome（`biome.json` 1 枚、`pnpm check`）。pre-commit フックは入れない | — | — |
 | テスト | Vitest 4 + `@cloudflare/vitest-plugin`（workerd 上で実行。プラグインの peer 依存のため Vitest は 4 系に固定）。対象は生成後処理の純関数、生成のリトライ、D1 / R2 への保存・取得・削除（失敗時の契約を含む）。D1 insert の失敗は本物の制約違反（ID の重複）で起こす。D1 delete と R2 の失敗は、現行スキーマでは本物のバインディングで起こせないため、例外を投げるラッパーの注入で起こす。そのため保存・生成のモジュールはバインディングを引数で受け取る | — | — |
-| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数 `GENERATOR`（`stub` / `workers-ai`）で固定 HTML を返すスタブに切り替える。wrangler 設定の `vars` は本番値の `workers-ai`、ローカルは `.dev.vars` で `stub` に上書きする。AI バインディングは起動時にリモート接続を張るため、`stub` でも `pnpm dev` には `wrangler login` が必要。リモート接続先は workers.dev 上に立ち、Worker 単位の Access がそこも保護するため、`cloudflared` のインストールと初回起動時のブラウザでの Access 承認も必要（非対話環境では Access のサービストークンがないと起動できない）。テストは `remoteBindings: false` にしてフェイクを注入し、接続しない） | — | — |
+| 開発 | pnpm, Wrangler（D1/R2 はローカルエミュレート。Workers AI はリモート実行で Neurons を消費するため、環境変数 `GENERATOR`（`stub` / `workers-ai`）で固定 HTML を返すスタブに切り替える。wrangler 設定の `vars` は本番値の `workers-ai`、ローカルは `.dev.vars` で `stub` に上書きする。AI バインディングは起動時にリモート接続を張るため、`stub` でも `pnpm dev` には `wrangler login` が必要。リモート接続先は workers.dev 上に立ち、Worker 単位の Access がそこも保護するため、初回起動時のブラウザでの Access 承認も必要。承認は Wrangler が `cloudflared access login` を呼んで行うため、`cloudflared` をインストールしておく（ないと `To use Wrangler with Cloudflare Access, please install cloudflared` で起動が止まる）。非対話環境では Access のサービストークンがないと起動できない。テストは `remoteBindings: false` にしてフェイクを注入し、接続しない） | — | — |
 
 ### 選定理由
 
